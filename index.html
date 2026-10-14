@@ -1,0 +1,626 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Мои таблетки</title>
+<meta name="theme-color" content="#f6f4ef" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#121212" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Таблетки">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.webmanifest">
+<style>
+  :root {
+    --bg: #f6f4ef;
+    --card: #ffffff;
+    --text: #141414;
+    --muted: #5a5a5a;
+    --line: #dedad2;
+    --accent: #1f6f4a;
+    --accent-soft: #e2f1e8;
+    --accent-text: #ffffff;
+    --warn: #b34700;
+    --warn-soft: #fdeee2;
+    --danger: #b3261e;
+    --focus: #1a5fd0;
+    --shadow: 0 1px 2px rgba(0,0,0,.06), 0 4px 16px rgba(0,0,0,.05);
+    --radius: 1.1rem;
+    font-size: 20px;
+  }
+  :root[data-theme="dark"] {
+    --bg: #121212;
+    --card: #1f1f1f;
+    --text: #f5f5f5;
+    --muted: #b8b8b8;
+    --line: #383838;
+    --accent: #5fd39b;
+    --accent-soft: #173727;
+    --accent-text: #0b1f15;
+    --warn: #ffab6b;
+    --warn-soft: #3a2414;
+    --danger: #ff8a80;
+    --focus: #8ab4ff;
+    --shadow: none;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Arial, sans-serif;
+    font-size: 1rem;
+    line-height: 1.4;
+    -webkit-font-smoothing: antialiased;
+  }
+  button, input { font: inherit; color: inherit; }
+  button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  :focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+  .wrap {
+    max-width: 40rem;
+    margin: 0 auto;
+    padding: max(16px, env(safe-area-inset-top)) 16px calc(2rem + env(safe-area-inset-bottom));
+  }
+
+  /* Шапка */
+  .top { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin-bottom: .75rem; }
+  .tools { display: flex; gap: .4rem; }
+  .icon-btn {
+    min-width: 2.6rem; height: 2.6rem; padding: 0 .6rem;
+    border-radius: .8rem; border: 2px solid var(--line); background: var(--card);
+    font-weight: 700; display: inline-flex; align-items: center; justify-content: center;
+  }
+  .icon-btn:active { transform: scale(.96); }
+  .icon-btn svg { width: 1.3rem; height: 1.3rem; }
+  .status { font-size: .8rem; color: var(--warn); font-weight: 600; }
+
+  .day { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin: .5rem 0 1rem; }
+  .day h1 { margin: 0; font-size: 1.6rem; line-height: 1.15; text-align: center; flex: 1; }
+  .day .sub { display: block; font-size: .9rem; font-weight: 500; color: var(--muted); margin-top: .2rem; }
+  .day .icon-btn { width: 2.8rem; height: 2.8rem; border-radius: 50%; }
+  .day .icon-btn[disabled] { opacity: .3; cursor: default; }
+  .back-today {
+    display: block; margin: -.5rem auto 1rem; padding: .4rem 1rem;
+    border-radius: 2rem; border: none; background: var(--accent-soft); color: var(--text); font-weight: 600; font-size: .9rem;
+  }
+
+  /* Прогресс */
+  .progress { background: var(--card); border-radius: var(--radius); padding: .9rem 1.1rem; box-shadow: var(--shadow); margin-bottom: 1.25rem; }
+  .progress-row { display: flex; justify-content: space-between; align-items: baseline; font-weight: 600; }
+  .progress-row b { font-size: 1.25rem; }
+  .bar { height: .6rem; border-radius: 1rem; background: var(--line); margin-top: .6rem; overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 1rem; transition: width .3s; }
+
+  /* Карточки приёма */
+  .group-title { font-size: 1.05rem; font-weight: 700; color: var(--muted); margin: 1.25rem .25rem .5rem; }
+  .dose {
+    width: 100%; display: flex; align-items: center; gap: 1rem;
+    background: var(--card); border: 2px solid transparent; border-radius: var(--radius);
+    padding: min(1rem, 22px) min(1.1rem, 22px); margin-bottom: .7rem; text-align: left; box-shadow: var(--shadow);
+    transition: background .2s, border-color .2s;
+  }
+  .dose:active { transform: scale(.99); }
+  .dose .info { flex: 1; min-width: 0; }
+  .dose .name { font-size: 1.25rem; font-weight: 700; line-height: 1.2; overflow-wrap: break-word; hyphens: auto; }
+  .dose .meta { color: var(--muted); margin-top: .2rem; overflow-wrap: break-word; hyphens: auto; }
+  .dose .state { font-weight: 600; margin-top: .3rem; font-size: .95rem; }
+  .check {
+    flex: none; width: min(3.2rem, 76px); height: min(3.2rem, 76px); border-radius: 50%;
+    border: 3px solid var(--line); display: flex; align-items: center; justify-content: center;
+  }
+  .check svg { width: 60%; height: 60%; opacity: 0; }
+  .dose.taken { background: var(--accent-soft); border-color: var(--accent); box-shadow: none; }
+  .dose.taken .check { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+  .dose.taken .check svg { opacity: 1; }
+  .dose.taken .state { color: var(--accent); }
+  :root[data-theme="dark"] .dose.taken .state { color: var(--accent); }
+  .dose.late { border-color: var(--warn); }
+  .dose.late .state { color: var(--warn); }
+  .dose.late .check { border-color: var(--warn); }
+
+  .empty { text-align: center; padding: 2.5rem 1rem; color: var(--muted); }
+  .empty p { margin: 0 0 1.25rem; font-size: 1.1rem; }
+
+  /* Кнопки */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+    min-height: 3.2rem; padding: .7rem 1.4rem; border-radius: 1rem; border: none;
+    font-weight: 700; font-size: 1.05rem;
+  }
+  .btn-primary { background: var(--accent); color: var(--accent-text); }
+  .btn-ghost { background: var(--card); border: 2px solid var(--line); }
+  .btn-danger { background: transparent; color: var(--danger); border: 2px solid currentColor; }
+  .btn-block { width: 100%; }
+  .manage { margin-top: 1.75rem; }
+
+  /* Экран управления */
+  .screen-head { display: flex; align-items: center; gap: .75rem; margin-bottom: 1.25rem; }
+  .screen-head h1 { margin: 0; font-size: 1.5rem; flex: 1; }
+  .pill-row {
+    width: 100%; display: flex; align-items: center; gap: .75rem; text-align: left;
+    background: var(--card); border: 2px solid transparent; border-radius: var(--radius);
+    padding: 1rem 1.1rem; margin-bottom: .7rem; box-shadow: var(--shadow);
+  }
+  .pill-row .info { flex: 1; min-width: 0; }
+  .pill-row .chev { color: var(--muted); font-size: 1.5rem; }
+
+  /* Форма */
+  label.f { display: block; font-weight: 700; margin: 1.1rem 0 .4rem; }
+  .hint { font-weight: 400; color: var(--muted); font-size: .9rem; }
+  input.in {
+    width: 100%; min-height: 3.2rem; padding: .6rem .9rem;
+    border: 2px solid var(--line); border-radius: .9rem; background: var(--card);
+    font-size: 1.1rem;
+  }
+  input.in:focus { border-color: var(--focus); outline: none; }
+  .times { display: flex; flex-direction: column; gap: .5rem; }
+  .time-row { display: flex; gap: .5rem; }
+  .time-row input { flex: 1; }
+  .time-row .icon-btn { height: 3.2rem; min-width: 3.2rem; color: var(--danger); }
+  .presets { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .6rem; }
+  .chip { padding: .45rem .9rem; border-radius: 2rem; border: 2px solid var(--line); background: var(--card); font-weight: 600; font-size: .95rem; }
+  .form-actions { display: flex; flex-direction: column; gap: .6rem; margin-top: 1.75rem; }
+  .error { color: var(--danger); font-weight: 600; margin-top: .5rem; min-height: 1.4em; }
+
+  /* Диалог */
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: flex; align-items: flex-end; justify-content: center; padding: 1rem; z-index: 10; }
+  .modal[hidden] { display: none; }
+  .sheet { background: var(--card); border-radius: 1.4rem; padding: 1.4rem; width: 100%; max-width: 32rem; margin-bottom: env(safe-area-inset-bottom); }
+  .sheet h2 { margin: 0 0 .5rem; font-size: 1.35rem; }
+  .sheet p { margin: 0 0 1.25rem; color: var(--muted); }
+  .sheet .form-actions { margin-top: 0; }
+  @media (min-width: 640px) { .modal { align-items: center; } }
+
+  /* Шрифт */
+  .font-panel { background: var(--card); border-radius: var(--radius); padding: 1rem 1.1rem; margin-bottom: 1rem; box-shadow: var(--shadow); }
+  .font-panel[hidden] { display: none; }
+  .font-row { display: flex; align-items: center; gap: .6rem; }
+  .font-row input[type=range] { flex: 1; accent-color: var(--accent); height: 2.4rem; }
+  .font-row .small { font-size: 14px; font-weight: 700; }
+  .font-row .big { font-size: 30px; font-weight: 700; }
+  .font-panel .panel-title { font-weight: 700; margin-bottom: .4rem; display: flex; justify-content: space-between; }
+  .theme-switch { display: flex; gap: .4rem; margin-top: .9rem; }
+  .theme-switch button { flex: 1; min-height: 2.8rem; border-radius: .8rem; border: 2px solid var(--line); background: var(--bg); font-weight: 600; }
+  .theme-switch button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+
+<div class="modal" id="modal" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <h2 id="modal-title"></h2>
+    <p id="modal-text"></p>
+    <div class="form-actions">
+      <button class="btn btn-primary btn-block" id="modal-ok"></button>
+      <button class="btn btn-ghost btn-block" id="modal-cancel">Отмена</button>
+    </div>
+  </div>
+</div>
+
+<script>window.PILLS_LOCAL = true;</script>
+<script>
+(() => {
+  const FONT_STEPS = [16, 18, 20, 23, 26, 30, 34];
+  const MONTHS = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+  const WEEKDAYS = ['воскресенье','понедельник','вторник','среда','четверг','пятница','суббота'];
+  const ICON_CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  };
+
+  let data = { pills: [], log: {} };
+  let online = true;
+  let view = 'today';          // 'today' | 'manage' | 'edit'
+  let editing = null;          // редактируемая таблетка
+  let offset = 0;              // смещение дня относительно сегодня
+  let showFont = false;
+  let fontIdx = store.get('fontIdx', 3);
+  let theme = store.get('theme', 'auto');
+
+  const app = document.getElementById('app');
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  const pad = n => String(n).padStart(2, '0');
+  const isoDate = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const nowHM = () => { const d = new Date(); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+  const dayDate = () => { const d = new Date(); d.setDate(d.getDate() + offset); return d; };
+
+  // ---------- Настройки отображения ----------
+  function applyFont() {
+    fontIdx = Math.max(0, Math.min(FONT_STEPS.length - 1, fontIdx));
+    document.documentElement.style.fontSize = FONT_STEPS[fontIdx] + 'px';
+    store.set('fontIdx', fontIdx);
+  }
+  function applyTheme() {
+    const dark = theme === 'dark' || (theme === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
+    document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+    store.set('theme', theme);
+  }
+  matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', applyTheme);
+
+  // ---------- Локальный режим (версия на сайте): данные хранятся в этом браузере ----------
+  const LOCAL = !!window.PILLS_LOCAL;
+  const LOCAL_KEY = 'pills-data';
+  const cleanTimes = times => [...new Set((times || []).filter(t => /^\d{2}:\d{2}$/.test(t)))].sort();
+  function localApi(method, url, body) {
+    const s = store.get(LOCAL_KEY, { version: 0, pills: [], log: {} });
+    if (method === 'GET') return s;
+    if (url === '/api/pills' && method === 'POST') {
+      const pill = {
+        id: body.id, name: String(body.name || '').trim().slice(0, 80),
+        dose: String(body.dose || '').trim().slice(0, 80), note: String(body.note || '').trim().slice(0, 200),
+        times: cleanTimes(body.times),
+      };
+      if (!pill.name) throw new Error('Нужно название');
+      if (!pill.times.length) pill.times = ['09:00'];
+      const i = s.pills.findIndex(x => x.id === pill.id);
+      if (i >= 0) s.pills[i] = pill; else s.pills.push(pill);
+    } else if (url.startsWith('/api/pills/') && method === 'DELETE') {
+      const id = decodeURIComponent(url.slice('/api/pills/'.length));
+      s.pills = s.pills.filter(x => x.id !== id);
+    } else if (url === '/api/toggle') {
+      const key = `${body.pillId}@${body.time}`;
+      const day = s.log[body.date] || (s.log[body.date] = {});
+      if (day[key]) delete day[key]; else day[key] = body.at;
+      if (!Object.keys(day).length) delete s.log[body.date];
+    }
+    s.version++;
+    localStorage.setItem(LOCAL_KEY, JSON.stringify(s));
+    return s;
+  }
+  if (LOCAL) {
+    // Просим браузер не удалять данные при нехватке места
+    try { navigator.storage?.persist?.(); } catch {}
+    // Изменения из другой вкладки этого же браузера
+    addEventListener('storage', e => { if (e.key === LOCAL_KEY) setData(store.get(LOCAL_KEY, data)); });
+  }
+
+  // ---------- Связь с сервером ----------
+  async function api(method, url, body) {
+    if (LOCAL) {
+      const j = localApi(method, url, body);
+      setData(j);
+      return j;
+    }
+    try {
+      const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || 'Ошибка');
+      setData(j);
+      setOnline(true);
+      return j;
+    } catch (e) {
+      setOnline(false);
+      throw e;
+    }
+  }
+  function setData(d) {
+    if (d.version !== undefined && data.version !== undefined && d.version < data.version) return;
+    data = d;
+    if (view !== 'edit') render();
+  }
+  function setOnline(v) {
+    if (online === v) return;
+    online = v;
+    const el = document.getElementById('status');
+    if (el) el.hidden = v;
+  }
+  function connect() {
+    if (LOCAL) return;
+    const es = new EventSource('/api/events');
+    es.onmessage = e => { setOnline(true); setData(JSON.parse(e.data)); };
+    es.onerror = () => { setOnline(false); };
+  }
+  // Safari может «усыплять» вкладку — при возврате обновляем данные
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) api('GET', '/api/state').catch(() => {});
+  });
+
+  // ---------- Диалог подтверждения ----------
+  function confirmBox(title, text, okText) {
+    return new Promise(resolve => {
+      const m = document.getElementById('modal');
+      document.getElementById('modal-title').textContent = title;
+      document.getElementById('modal-text').textContent = text;
+      const ok = document.getElementById('modal-ok');
+      const cancel = document.getElementById('modal-cancel');
+      ok.textContent = okText;
+      m.hidden = false;
+      ok.focus();
+      const done = v => { m.hidden = true; ok.onclick = cancel.onclick = m.onclick = null; resolve(v); };
+      ok.onclick = () => done(true);
+      cancel.onclick = () => done(false);
+      m.onclick = e => { if (e.target === m) done(false); };
+    });
+  }
+
+  // ---------- Экраны ----------
+  function fontPanel() {
+    return `
+      <div class="font-panel" ${showFont ? '' : 'hidden'}>
+        <div class="panel-title"><span>Размер текста</span></div>
+        <div class="font-row">
+          <button class="icon-btn" data-act="font-" aria-label="Уменьшить текст"><span class="small">А</span></button>
+          <input type="range" min="0" max="${FONT_STEPS.length - 1}" step="1" value="${fontIdx}" id="font-range" aria-label="Размер текста">
+          <button class="icon-btn" data-act="font+" aria-label="Увеличить текст"><span class="big">А</span></button>
+        </div>
+        <div class="theme-switch" role="group" aria-label="Оформление">
+          <button data-theme-set="light" aria-pressed="${theme === 'light'}">Светлая</button>
+          <button data-theme-set="dark" aria-pressed="${theme === 'dark'}">Тёмная</button>
+          <button data-theme-set="auto" aria-pressed="${theme === 'auto'}">Авто</button>
+        </div>
+      </div>`;
+  }
+
+  function topBar() {
+    return `
+      <div class="top">
+        <span class="status" id="status" ${online ? 'hidden' : ''}>● Нет связи с компьютером</span>
+        <span></span>
+        <div class="tools">
+          <button class="icon-btn" data-act="toggle-font" aria-expanded="${showFont}" aria-label="Размер текста и оформление">Аа</button>
+        </div>
+      </div>
+      ${fontPanel()}`;
+  }
+
+  function renderToday() {
+    const d = dayDate();
+    const date = isoDate(d);
+    const isToday = offset === 0;
+    const label = isToday ? 'Сегодня' : offset === -1 ? 'Вчера' : offset === 1 ? 'Завтра' : WEEKDAYS[d.getDay()][0].toUpperCase() + WEEKDAYS[d.getDay()].slice(1);
+    const sub = `${d.getDate()} ${MONTHS[d.getMonth()]}${isToday || Math.abs(offset) === 1 ? ', ' + WEEKDAYS[d.getDay()] : ''}`;
+    const log = data.log[date] || {};
+    const now = nowHM();
+
+    const doses = [];
+    for (const p of data.pills) for (const t of p.times) doses.push({ p, t, at: log[`${p.id}@${t}`] });
+    doses.sort((a, b) => a.t.localeCompare(b.t) || a.p.name.localeCompare(b.p.name, 'ru'));
+    const taken = doses.filter(x => x.at).length;
+
+    let html = topBar() + `
+      <div class="day">
+        <button class="icon-btn" data-act="prev" aria-label="Предыдущий день">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+        </button>
+        <h1>${label}<span class="sub">${sub}</span></h1>
+        <button class="icon-btn" data-act="next" aria-label="Следующий день" ${offset >= 1 ? 'disabled' : ''}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>
+        </button>
+      </div>
+      ${isToday ? '' : '<button class="back-today" data-act="today">Вернуться к сегодня</button>'}`;
+
+    if (!data.pills.length) {
+      html += `
+        <div class="empty">
+          <p>Список лекарств пока пуст.</p>
+          <button class="btn btn-primary" data-act="add">+ Добавить лекарство</button>
+        </div>`;
+      app.innerHTML = html;
+      return;
+    }
+
+    const allDone = taken === doses.length;
+    html += `
+      <div class="progress" role="status">
+        <div class="progress-row">
+          <span>${allDone ? 'Всё принято' : 'Принято'}</span>
+          <b>${taken} из ${doses.length}</b>
+        </div>
+        <div class="bar"><i style="width:${doses.length ? (taken / doses.length * 100) : 0}%"></i></div>
+      </div>`;
+
+    let lastTime = null;
+    for (const { p, t, at } of doses) {
+      if (t !== lastTime) { html += `<div class="group-title">${t}</div>`; lastTime = t; }
+      const late = !at && (offset < 0 || (isToday && t <= now));
+      const state = at ? `Принято${isToday || offset === 0 ? ' в ' + at : ''}` : late ? 'Пора принять' : 'Не принято';
+      const cls = at ? 'taken' : late ? 'late' : '';
+      html += `
+        <button class="dose ${cls}" data-dose="${esc(p.id)}" data-time="${t}" aria-pressed="${!!at}">
+          <span class="info">
+            <span class="name">${esc(p.name)}</span>
+            ${p.dose || p.note ? `<span class="meta" style="display:block">${esc([p.dose, p.note].filter(Boolean).join(' · '))}</span>` : ''}
+            <span class="state" style="display:block">${state}</span>
+          </span>
+          <span class="check" aria-hidden="true">${ICON_CHECK}</span>
+        </button>`;
+    }
+
+    html += `<div class="manage"><button class="btn btn-ghost btn-block" data-act="manage">Мои лекарства</button></div>`;
+    app.innerHTML = html;
+  }
+
+  function renderManage() {
+    const pills = [...data.pills].sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+    let html = topBar() + `
+      <div class="screen-head">
+        <button class="icon-btn" data-act="back" aria-label="Назад">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+        </button>
+        <h1>Мои лекарства</h1>
+      </div>`;
+    if (!pills.length) html += `<div class="empty"><p>Пока ничего не добавлено.</p></div>`;
+    for (const p of pills) {
+      html += `
+        <button class="pill-row" data-edit="${esc(p.id)}">
+          <span class="info">
+            <span class="name" style="display:block;font-size:1.2rem;font-weight:700">${esc(p.name)}</span>
+            <span class="meta" style="display:block;color:var(--muted)">${esc([p.dose, p.times.join(', ')].filter(Boolean).join(' · '))}</span>
+          </span>
+          <span class="chev" aria-hidden="true">›</span>
+        </button>`;
+    }
+    html += `<div class="manage"><button class="btn btn-primary btn-block" data-act="add">+ Добавить лекарство</button></div>`;
+    app.innerHTML = html;
+  }
+
+  function renderEdit() {
+    const p = editing;
+    const isNew = !data.pills.some(x => x.id === p.id);
+    app.innerHTML = topBar() + `
+      <div class="screen-head">
+        <button class="icon-btn" data-act="cancel-edit" aria-label="Назад">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+        </button>
+        <h1>${isNew ? 'Новое лекарство' : 'Изменить'}</h1>
+      </div>
+      <form id="pill-form" autocomplete="off">
+        <label class="f" for="f-name">Название</label>
+        <input class="in" id="f-name" value="${esc(p.name)}" placeholder="Аспирин" maxlength="80" required>
+
+        <label class="f" for="f-dose">Сколько принимать <span class="hint">— необязательно</span></label>
+        <input class="in" id="f-dose" value="${esc(p.dose)}" placeholder="1 таблетка" maxlength="80">
+
+        <label class="f" for="f-note">Заметка <span class="hint">— необязательно</span></label>
+        <input class="in" id="f-note" value="${esc(p.note)}" placeholder="После еды" maxlength="200">
+
+        <label class="f">Время приёма</label>
+        <div class="times" id="times">
+          ${p.times.map((t, i) => `
+            <div class="time-row">
+              <input class="in" type="time" value="${t}" data-time-idx="${i}" aria-label="Время приёма ${i + 1}">
+              ${p.times.length > 1 ? `<button type="button" class="icon-btn" data-del-time="${i}" aria-label="Убрать это время">✕</button>` : ''}
+            </div>`).join('')}
+        </div>
+        <div class="presets">
+          <button type="button" class="chip" data-add-time="">+ Ещё время</button>
+          <button type="button" class="chip" data-add-time="08:00">Утро 8:00</button>
+          <button type="button" class="chip" data-add-time="13:00">День 13:00</button>
+          <button type="button" class="chip" data-add-time="20:00">Вечер 20:00</button>
+        </div>
+
+        <div class="error" id="form-error" role="alert"></div>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary btn-block">Сохранить</button>
+          ${isNew ? '' : '<button type="button" class="btn btn-danger btn-block" data-act="delete">Удалить лекарство</button>'}
+        </div>
+      </form>`;
+  }
+
+  function render() {
+    applyTheme();
+    if (view === 'manage') renderManage();
+    else if (view === 'edit') renderEdit();
+    else renderToday();
+  }
+
+  // Сохраняем то, что введено в форму, в объект editing
+  function syncForm() {
+    if (view !== 'edit') return;
+    const $ = id => document.getElementById(id);
+    editing.name = $('f-name').value;
+    editing.dose = $('f-dose').value;
+    editing.note = $('f-note').value;
+    editing.times = [...document.querySelectorAll('[data-time-idx]')].map(i => i.value);
+  }
+
+  function go(v) { view = v; render(); window.scrollTo(0, 0); }
+
+  // ---------- События ----------
+  app.addEventListener('click', async e => {
+    const t = e.target.closest('button');
+    if (!t) return;
+    const act = t.dataset.act;
+
+    if (t.dataset.themeSet) { theme = t.dataset.themeSet; syncForm(); render(); return; }
+
+    if (t.dataset.dose) {
+      const pillId = t.dataset.dose, time = t.dataset.time;
+      const date = isoDate(dayDate());
+      const already = (data.log[date] || {})[`${pillId}@${time}`];
+      if (already) {
+        const pill = data.pills.find(x => x.id === pillId);
+        const ok = await confirmBox('Снять отметку?', `«${pill ? pill.name : ''}» в ${time} будет отмечено как не принятое.`, 'Да, снять отметку');
+        if (!ok) return;
+      }
+      api('POST', '/api/toggle', { date, pillId, time, at: nowHM() }).catch(() => alert('Нет связи с компьютером. Проверьте Wi-Fi.'));
+      return;
+    }
+
+    if (t.dataset.edit) {
+      editing = structuredClone(data.pills.find(x => x.id === t.dataset.edit));
+      go('edit');
+      return;
+    }
+    if (t.dataset.addTime !== undefined) {
+      syncForm();
+      editing.times.push(t.dataset.addTime || nowHM());
+      renderEdit();
+      const inputs = document.querySelectorAll('[data-time-idx]');
+      inputs[inputs.length - 1]?.focus();
+      return;
+    }
+    if (t.dataset.delTime !== undefined) {
+      syncForm();
+      editing.times.splice(Number(t.dataset.delTime), 1);
+      renderEdit();
+      return;
+    }
+
+    switch (act) {
+      case 'toggle-font': showFont = !showFont; syncForm(); render(); break;
+      case 'font-': fontIdx--; applyFont(); syncForm(); render(); break;
+      case 'font+': fontIdx++; applyFont(); syncForm(); render(); break;
+      case 'prev': offset--; render(); break;
+      case 'next': if (offset < 1) { offset++; render(); } break;
+      case 'today': offset = 0; render(); break;
+      case 'manage': go('manage'); break;
+      case 'back': go('today'); break;
+      case 'add':
+        editing = { id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2), name: '', dose: '', note: '', times: ['09:00'] };
+        go('edit');
+        break;
+      case 'cancel-edit': go('manage'); break;
+      case 'delete': {
+        const ok = await confirmBox('Удалить лекарство?', `«${editing.name}» исчезнет из списка.`, 'Да, удалить');
+        if (!ok) return;
+        try { await api('DELETE', '/api/pills/' + encodeURIComponent(editing.id)); go('manage'); }
+        catch { alert('Нет связи с компьютером. Проверьте Wi-Fi.'); }
+        break;
+      }
+    }
+  });
+
+  app.addEventListener('input', e => {
+    if (e.target.id === 'font-range') { fontIdx = Number(e.target.value); applyFont(); }
+  });
+
+  app.addEventListener('submit', async e => {
+    e.preventDefault();
+    syncForm();
+    const err = document.getElementById('form-error');
+    const pill = { ...editing, name: editing.name.trim(), times: editing.times.filter(Boolean) };
+    if (!pill.name) { err.textContent = 'Введите название лекарства'; document.getElementById('f-name').focus(); return; }
+    if (!pill.times.length) { err.textContent = 'Укажите хотя бы одно время приёма'; return; }
+    try { await api('POST', '/api/pills', pill); go('manage'); }
+    catch (ex) { err.textContent = 'Не удалось сохранить: нет связи с компьютером'; }
+  });
+
+  // Перерисовка раз в минуту: «пора принять» и смена дня в полночь
+  let lastDay = isoDate(new Date());
+  setInterval(() => {
+    const today = isoDate(new Date());
+    if (today !== lastDay) { lastDay = today; offset = 0; }
+    if (view === 'today') render();
+  }, 60000);
+
+  applyFont();
+  applyTheme();
+  render();
+  api('GET', '/api/state').catch(() => render());
+  connect();
+  // На сайте — работа без интернета после первого открытия
+  if (LOCAL && 'serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+})();
+</script>
+</body>
+</html>
