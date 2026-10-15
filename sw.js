@@ -1,5 +1,5 @@
 // Кэш для работы без интернета: сначала сеть (чтобы получать обновления), при её отсутствии — кэш.
-const CACHE = 'pills-v1';
+const CACHE = 'pills-v2';
 const FILES = ['./', 'index.html', 'manifest.webmanifest', 'icon.svg', 'icon-180.png'];
 
 self.addEventListener('install', e => {

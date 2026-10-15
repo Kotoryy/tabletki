@@ -26,6 +26,7 @@
     --warn: #b34700;
     --warn-soft: #fdeee2;
     --danger: #b3261e;
+    --danger-soft: #fbe5e3;
     --focus: #1a5fd0;
     --shadow: 0 1px 2px rgba(0,0,0,.06), 0 4px 16px rgba(0,0,0,.05);
     --radius: 1.1rem;
@@ -43,6 +44,7 @@
     --warn: #ffab6b;
     --warn-soft: #3a2414;
     --danger: #ff8a80;
+    --danger-soft: #3d1a18;
     --focus: #8ab4ff;
     --shadow: none;
   }
@@ -79,9 +81,9 @@
   .status { font-size: .8rem; color: var(--warn); font-weight: 600; }
 
   .day { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin: .5rem 0 1rem; }
-  .day h1 { margin: 0; font-size: 1.6rem; line-height: 1.15; text-align: center; flex: 1; }
+  .day h1 { margin: 0; min-width: 0; overflow-wrap: break-word; font-size: min(1.6rem, 36px); line-height: 1.15; text-align: center; flex: 1; }
   .day .sub { display: block; font-size: .9rem; font-weight: 500; color: var(--muted); margin-top: .2rem; }
-  .day .icon-btn { width: 2.8rem; height: 2.8rem; border-radius: 50%; }
+  .day .icon-btn { flex: none; width: min(2.8rem, 56px); height: min(2.8rem, 56px); min-width: 0; padding: 0; border-radius: 50%; }
   .day .icon-btn[disabled] { opacity: .3; cursor: default; }
   .back-today {
     display: block; margin: -.5rem auto 1rem; padding: .4rem 1rem;
@@ -139,7 +141,7 @@
 
   /* Экран управления */
   .screen-head { display: flex; align-items: center; gap: .75rem; margin-bottom: 1.25rem; }
-  .screen-head h1 { margin: 0; font-size: 1.5rem; flex: 1; }
+  .screen-head h1 { margin: 0; font-size: min(1.5rem, 34px); flex: 1; min-width: 0; overflow-wrap: break-word; }
   .pill-row {
     width: 100%; display: flex; align-items: center; gap: .75rem; text-align: left;
     background: var(--card); border: 2px solid transparent; border-radius: var(--radius);
@@ -179,13 +181,36 @@
   .font-panel { background: var(--card); border-radius: var(--radius); padding: 1rem 1.1rem; margin-bottom: 1rem; box-shadow: var(--shadow); }
   .font-panel[hidden] { display: none; }
   .font-row { display: flex; align-items: center; gap: .6rem; }
-  .font-row input[type=range] { flex: 1; accent-color: var(--accent); height: 2.4rem; }
+  .font-row input[type=range] { flex: 1; min-width: 0; accent-color: var(--accent); height: 2.4rem; }
   .font-row .small { font-size: 14px; font-weight: 700; }
   .font-row .big { font-size: 30px; font-weight: 700; }
   .font-panel .panel-title { font-weight: 700; margin-bottom: .4rem; display: flex; justify-content: space-between; }
-  .theme-switch { display: flex; gap: .4rem; margin-top: .9rem; }
-  .theme-switch button { flex: 1; min-height: 2.8rem; border-radius: .8rem; border: 2px solid var(--line); background: var(--bg); font-weight: 600; }
+  .theme-switch { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .9rem; }
+  .theme-switch button { flex: 1 1 auto; padding: 0 .6rem; min-height: 2.8rem; border-radius: .8rem; border: 2px solid var(--line); background: var(--bg); font-weight: 600; }
   .theme-switch button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+
+  /* Календарь */
+  .cal { background: var(--card); border-radius: var(--radius); padding: .75rem .5rem; box-shadow: var(--shadow); }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+  .cal-head { margin-bottom: .4rem; text-align: center; color: var(--muted); font-weight: 700; font-size: min(.8rem, 17px); }
+  .cal-cell {
+    aspect-ratio: 1; min-width: 0; border-radius: .7rem; border: 2px solid transparent; background: transparent;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0;
+    font-weight: 700; font-size: min(1rem, 21px); line-height: 1.1;
+  }
+  .cal-cell.blank { visibility: hidden; }
+  .cal-cell[disabled] { color: var(--muted); opacity: .45; cursor: default; }
+  .cal-cell .mark { font-size: .75em; min-height: 1.1em; }
+  .cal-cell.full { background: var(--accent); color: var(--accent-text); }
+  .cal-cell.part { background: var(--warn-soft); color: var(--warn); border-color: var(--warn); }
+  .cal-cell.miss { background: var(--danger-soft); color: var(--danger); border-color: var(--danger); }
+  .cal-cell.is-today { outline: 3px solid var(--text); outline-offset: 1px; }
+  .cal-summary { text-align: center; font-size: 1.05rem; margin: 1rem 0 .5rem; }
+  .legend { display: flex; flex-wrap: wrap; justify-content: center; gap: .5rem 1.1rem; margin-top: .75rem; font-weight: 600; font-size: .95rem; }
+  .legend span { display: inline-flex; align-items: center; gap: .4rem; }
+  .legend .cal-cell { width: 1.7rem; height: 1.7rem; aspect-ratio: auto; border-radius: .45rem; font-style: normal; font-size: .9rem; }
+  .bottom-btns { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; }
+  @media (max-width: 380px) { .bottom-btns { grid-template-columns: 1fr; } }
 
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 </style>
@@ -222,6 +247,7 @@
   let view = 'today';          // 'today' | 'manage' | 'edit'
   let editing = null;          // редактируемая таблетка
   let offset = 0;              // смещение дня относительно сегодня
+  let calMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1); // месяц в календаре
   let showFont = false;
   let fontIdx = store.get('fontIdx', 3);
   let theme = store.get('theme', 'auto');
@@ -258,6 +284,8 @@
         id: body.id, name: String(body.name || '').trim().slice(0, 80),
         dose: String(body.dose || '').trim().slice(0, 80), note: String(body.note || '').trim().slice(0, 200),
         times: cleanTimes(body.times),
+        created: /^\d{4}-\d{2}-\d{2}$/.test(body.created || '') ? body.created
+          : s.pills.find(x => x.id === body.id)?.created,
       };
       if (!pill.name) throw new Error('Нужно название');
       if (!pill.times.length) pill.times = ['09:00'];
@@ -372,18 +400,104 @@
       ${fontPanel()}`;
   }
 
+  // Приёмы на дату: только лекарства, которые уже были добавлены к этому дню
+  function dosesFor(date) {
+    const log = data.log[date] || {};
+    const doses = [];
+    for (const p of data.pills) {
+      if (p.created && p.created > date) continue;
+      for (const t of p.times) doses.push({ p, t, at: log[`${p.id}@${t}`] });
+    }
+    return doses.sort((a, b) => a.t.localeCompare(b.t) || a.p.name.localeCompare(b.p.name, 'ru'));
+  }
+
+  // С какого дня ведётся учёт: первая отметка или первое добавленное лекарство
+  function trackStart() {
+    const dates = [...Object.keys(data.log), ...data.pills.map(p => p.created).filter(Boolean)];
+    return dates.length ? dates.sort()[0] : null;
+  }
+
+  // Итог дня для календаря: full | part | miss | pending | null
+  function dayStatus(date, today, start) {
+    if (date > today || !start || date < start) return null;
+    const doses = dosesFor(date);
+    if (!doses.length) return null;
+    const taken = doses.filter(x => x.at).length;
+    if (taken === doses.length) return 'full';
+    if (date === today) return 'pending';
+    return taken ? 'part' : 'miss';
+  }
+
+  const MONTHS_NOM = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+  const STATUS_MARK = { full: '✓', part: '◐', miss: '✕', pending: '' };
+  const STATUS_TEXT = { full: 'всё принято', part: 'принято частично', miss: 'пропущено', pending: 'сегодня, ещё не всё принято' };
+
+  function renderCalendar() {
+    const today = isoDate(new Date());
+    const start = trackStart();
+    const y = calMonth.getFullYear(), m = calMonth.getMonth();
+    const now = new Date();
+    const isCurrent = y === now.getFullYear() && m === now.getMonth();
+    const daysInMonth = new Date(y, m + 1, 0).getDate();
+    const lead = (new Date(y, m, 1).getDay() + 6) % 7; // понедельник — первый день недели
+
+    let cells = '';
+    for (let i = 0; i < lead; i++) cells += '<span class="cal-cell blank" aria-hidden="true"></span>';
+    const counts = { full: 0, part: 0, miss: 0 };
+    for (let dnum = 1; dnum <= daysInMonth; dnum++) {
+      const date = `${y}-${pad(m + 1)}-${pad(dnum)}`;
+      const st = dayStatus(date, today, start);
+      if (counts[st] !== undefined) counts[st]++;
+      const future = date > today;
+      const label = `${dnum} ${MONTHS[m]}${st ? ', ' + STATUS_TEXT[st] : ''}`;
+      cells += `
+        <button class="cal-cell ${st || ''} ${date === today ? 'is-today' : ''}" data-day="${date}" ${future ? 'disabled' : ''} aria-label="${label}">
+          <span class="num">${dnum}</span><span class="mark" aria-hidden="true">${st ? STATUS_MARK[st] : ''}</span>
+        </button>`;
+    }
+    const tracked = counts.full + counts.part + counts.miss;
+
+    app.innerHTML = topBar() + `
+      <div class="screen-head">
+        <button class="icon-btn" data-act="back" aria-label="Назад">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+        </button>
+        <h1>Календарь</h1>
+      </div>
+      <div class="day">
+        <button class="icon-btn" data-act="cal-prev" aria-label="Предыдущий месяц">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+        </button>
+        <h1>${MONTHS_NOM[m]}<span class="sub">${y}</span></h1>
+        <button class="icon-btn" data-act="cal-next" aria-label="Следующий месяц" ${isCurrent ? 'disabled' : ''}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>
+        </button>
+      </div>
+      <div class="cal">
+        <div class="cal-grid cal-head" aria-hidden="true"><span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span></div>
+        <div class="cal-grid">${cells}</div>
+      </div>
+      ${tracked ? `<p class="cal-summary">Всё принято в <b>${counts.full}</b> из <b>${tracked}</b> ${plural(tracked, 'дня', 'дней', 'дней')}</p>` : ''}
+      <div class="legend">
+        <span><i class="cal-cell full"><span class="mark">✓</span></i>Всё принято</span>
+        <span><i class="cal-cell part"><span class="mark">◐</span></i>Частично</span>
+        <span><i class="cal-cell miss"><span class="mark">✕</span></i>Пропущено</span>
+      </div>
+      <p class="hint" style="text-align:center;margin-top:1rem">Нажмите на день, чтобы посмотреть подробно</p>`;
+  }
+  const plural = (n, one, few, many) => {
+    const n10 = n % 10, n100 = n % 100;
+    return n10 === 1 && n100 !== 11 ? one : n10 >= 2 && n10 <= 4 && (n100 < 12 || n100 > 14) ? few : many;
+  };
+
   function renderToday() {
     const d = dayDate();
     const date = isoDate(d);
     const isToday = offset === 0;
     const label = isToday ? 'Сегодня' : offset === -1 ? 'Вчера' : offset === 1 ? 'Завтра' : WEEKDAYS[d.getDay()][0].toUpperCase() + WEEKDAYS[d.getDay()].slice(1);
     const sub = `${d.getDate()} ${MONTHS[d.getMonth()]}${isToday || Math.abs(offset) === 1 ? ', ' + WEEKDAYS[d.getDay()] : ''}`;
-    const log = data.log[date] || {};
     const now = nowHM();
-
-    const doses = [];
-    for (const p of data.pills) for (const t of p.times) doses.push({ p, t, at: log[`${p.id}@${t}`] });
-    doses.sort((a, b) => a.t.localeCompare(b.t) || a.p.name.localeCompare(b.p.name, 'ru'));
+    const doses = dosesFor(date);
     const taken = doses.filter(x => x.at).length;
 
     let html = topBar() + `
@@ -408,6 +522,12 @@
       return;
     }
 
+    if (!doses.length) {
+      html += `<div class="empty"><p>В этот день лекарства ещё не были добавлены.</p></div>` + bottomButtons();
+      app.innerHTML = html;
+      return;
+    }
+
     const allDone = taken === doses.length;
     html += `
       <div class="progress" role="status">
@@ -422,7 +542,7 @@
     for (const { p, t, at } of doses) {
       if (t !== lastTime) { html += `<div class="group-title">${t}</div>`; lastTime = t; }
       const late = !at && (offset < 0 || (isToday && t <= now));
-      const state = at ? `Принято${isToday || offset === 0 ? ' в ' + at : ''}` : late ? 'Пора принять' : 'Не принято';
+      const state = at ? `Принято в ${at}` : offset < 0 ? 'Не принято' : late ? 'Пора принять' : 'Не принято';
       const cls = at ? 'taken' : late ? 'late' : '';
       html += `
         <button class="dose ${cls}" data-dose="${esc(p.id)}" data-time="${t}" aria-pressed="${!!at}">
@@ -435,9 +555,18 @@
         </button>`;
     }
 
-    html += `<div class="manage"><button class="btn btn-ghost btn-block" data-act="manage">Мои лекарства</button></div>`;
+    html += bottomButtons();
     app.innerHTML = html;
   }
+
+  const bottomButtons = () => `
+    <div class="manage bottom-btns">
+      <button class="btn btn-ghost" data-act="calendar">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+        Календарь
+      </button>
+      <button class="btn btn-ghost" data-act="manage">Мои лекарства</button>
+    </div>`;
 
   function renderManage() {
     const pills = [...data.pills].sort((a, b) => a.name.localeCompare(b.name, 'ru'));
@@ -510,6 +639,7 @@
     applyTheme();
     if (view === 'manage') renderManage();
     else if (view === 'edit') renderEdit();
+    else if (view === 'calendar') renderCalendar();
     else renderToday();
   }
 
@@ -546,6 +676,14 @@
       return;
     }
 
+    if (t.dataset.day) {
+      const [yy, mm, dd] = t.dataset.day.split('-').map(Number);
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      offset = Math.round((new Date(yy, mm - 1, dd) - today) / 86400000);
+      go('today');
+      return;
+    }
+
     if (t.dataset.edit) {
       editing = structuredClone(data.pills.find(x => x.id === t.dataset.edit));
       go('edit');
@@ -574,9 +712,12 @@
       case 'next': if (offset < 1) { offset++; render(); } break;
       case 'today': offset = 0; render(); break;
       case 'manage': go('manage'); break;
+      case 'calendar': { const d = dayDate(); calMonth = new Date(d.getFullYear(), d.getMonth(), 1); go('calendar'); break; }
+      case 'cal-prev': calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() - 1, 1); render(); break;
+      case 'cal-next': calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 1); render(); break;
       case 'back': go('today'); break;
       case 'add':
-        editing = { id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2), name: '', dose: '', note: '', times: ['09:00'] };
+        editing = { id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2), name: '', dose: '', note: '', times: ['09:00'], created: isoDate(new Date()) };
         go('edit');
         break;
       case 'cancel-edit': go('manage'); break;
