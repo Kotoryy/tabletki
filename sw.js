@@ -1,5 +1,6 @@
 // Кэш для работы без интернета: сначала сеть (чтобы получать обновления), при её отсутствии — кэш.
-const CACHE = 'pills-v2';
+// Плюс показ напоминаний, которые присылает сервер.
+const CACHE = 'pills-v3';
 const FILES = ['./', 'index.html', 'manifest.webmanifest', 'icon.svg', 'icon-180.png'];
 
 self.addEventListener('install', e => {
@@ -13,7 +14,8 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
-  if (e.request.method !== 'GET') return;
+  // Запросы к серверу списка не кэшируем — только файлы самого сайта
+  if (e.request.method !== 'GET' || new URL(e.request.url).origin !== location.origin) return;
   e.respondWith(
     fetch(e.request)
       .then(res => {
@@ -22,4 +24,29 @@ self.addEventListener('fetch', e => {
       })
       .catch(() => caches.match(e.request, { ignoreSearch: true }).then(r => r || caches.match('index.html')))
   );
+});
+
+self.addEventListener('push', e => {
+  let msg = {};
+  try { msg = e.data ? e.data.json() : {}; } catch {}
+  e.waitUntil(self.registration.showNotification(msg.title || 'Пора принять лекарство', {
+    body: msg.body || '',
+    tag: msg.tag || 'pills',
+    icon: 'icon-180.png',
+    badge: 'icon-180.png',
+    renotify: true,
+    requireInteraction: true,
+  }));
+});
+
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  e.waitUntil((async () => {
+    const list = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const c of list) {
+      c.postMessage('open-today');
+      if ('focus' in c) return c.focus();
+    }
+    return self.clients.openWindow('./');
+  })());
 });

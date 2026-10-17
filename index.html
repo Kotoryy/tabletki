@@ -212,6 +212,17 @@
   .bottom-btns { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; }
   @media (max-width: 380px) { .bottom-btns { grid-template-columns: 1fr; } }
 
+  /* Напоминания */
+  .panel { background: var(--card); border-radius: var(--radius); padding: 1rem 1.1rem; box-shadow: var(--shadow); margin-bottom: 1rem; }
+  .panel p { margin: 0 0 .9rem; }
+  .panel .form-actions { margin-top: .9rem; }
+  .section-title { font-size: 1.15rem; margin: 1.5rem .25rem .6rem; }
+  .steps { margin: 0 0 .5rem; padding-left: 1.4rem; }
+  .steps li { margin-bottom: .5rem; }
+  .ok-line { color: var(--accent); font-weight: 700; }
+  .code-box { display: flex; flex-direction: column; align-items: center; gap: .2rem; padding: .8rem; border-radius: .9rem; background: var(--bg); }
+  .code-box b { font-size: min(1.5rem, 32px); letter-spacing: .08em; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; overflow-wrap: anywhere; text-align: center; }
+
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 </style>
 </head>
@@ -229,7 +240,7 @@
   </div>
 </div>
 
-<script>window.PILLS_LOCAL = true;</script>
+<script>window.PILLS_API = "https://tabletki-api.kotoryy.ru";</script>
 <script>
 (() => {
   const FONT_STEPS = [16, 18, 20, 23, 26, 30, 34];
@@ -272,52 +283,176 @@
   }
   matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', applyTheme);
 
-  // ---------- Локальный режим (версия на сайте): данные хранятся в этом браузере ----------
-  const LOCAL = !!window.PILLS_LOCAL;
-  const LOCAL_KEY = 'pills-data';
+  // ---------- Облачный режим (версия на сайте): общий список семьи на сервере ----------
+  // Изменения сразу применяются на устройстве, копятся в очереди и отправляются, когда есть интернет.
+  const API = window.PILLS_API || '';
+  const CLOUD = !!API;
+  const CACHE_KEY = 'pills-data', QUEUE_KEY = 'pills-queue', HKEY = 'pills-key';
+  const TZ = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return ''; } })();
   const cleanTimes = times => [...new Set((times || []).filter(t => /^\d{2}:\d{2}$/.test(t)))].sort();
-  function localApi(method, url, body) {
-    const s = store.get(LOCAL_KEY, { version: 0, pills: [], log: {} });
-    if (method === 'GET') return s;
-    if (url === '/api/pills' && method === 'POST') {
-      const pill = {
-        id: body.id, name: String(body.name || '').trim().slice(0, 80),
-        dose: String(body.dose || '').trim().slice(0, 80), note: String(body.note || '').trim().slice(0, 200),
-        times: cleanTimes(body.times),
-        created: /^\d{4}-\d{2}-\d{2}$/.test(body.created || '') ? body.created
-          : s.pills.find(x => x.id === body.id)?.created,
-      };
-      if (!pill.name) throw new Error('Нужно название');
+  let hkey = store.get(HKEY, '');
+  let queue = store.get(QUEUE_KEY, []);
+  let syncing = null;
+
+  // То же самое делает сервер с каждой операцией
+  function applyOp(s, op) {
+    if (op.type === 'pill') {
+      const p = op.pill;
+      const pill = { id: p.id, name: String(p.name || '').trim().slice(0, 80), dose: String(p.dose || '').trim().slice(0, 80),
+        note: String(p.note || '').trim().slice(0, 200), times: cleanTimes(p.times) };
       if (!pill.times.length) pill.times = ['09:00'];
       const i = s.pills.findIndex(x => x.id === pill.id);
+      const created = /^\d{4}-\d{2}-\d{2}$/.test(p.created || '') ? p.created : s.pills[i]?.created;
+      if (created) pill.created = created;
       if (i >= 0) s.pills[i] = pill; else s.pills.push(pill);
-    } else if (url.startsWith('/api/pills/') && method === 'DELETE') {
-      const id = decodeURIComponent(url.slice('/api/pills/'.length));
-      s.pills = s.pills.filter(x => x.id !== id);
-    } else if (url === '/api/toggle') {
-      const key = `${body.pillId}@${body.time}`;
-      const day = s.log[body.date] || (s.log[body.date] = {});
-      if (day[key]) delete day[key]; else day[key] = body.at;
-      if (!Object.keys(day).length) delete s.log[body.date];
+    } else if (op.type === 'del') {
+      s.pills = s.pills.filter(x => x.id !== op.id);
+    } else if (op.type === 'mark') {
+      const key = `${op.pillId}@${op.time}`;
+      const day = s.log[op.date] || (s.log[op.date] = {});
+      if (op.at) day[key] = op.at; else delete day[key];
+      if (!Object.keys(day).length) delete s.log[op.date];
     }
-    s.version++;
-    localStorage.setItem(LOCAL_KEY, JSON.stringify(s));
+  }
+
+  function showData(d) {
+    data = d;
+    store.set(CACHE_KEY, d);
+    if (view !== 'edit') render();
+  }
+
+  async function cloudFetch(path, body) {
+    const r = await fetch(API + path, body === undefined ? { cache: 'no-store' }
+      : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { const e = new Error(j.error || 'Ошибка'); e.status = r.status; throw e; }
+    return j;
+  }
+
+  // Отправить очередь и получить свежий общий список
+  function sync() {
+    if (!CLOUD) return Promise.resolve();
+    if (syncing) return syncing;
+    syncing = (async () => {
+      try {
+        if (!hkey) {
+          // Первый запуск: создаём общий список из того, что уже есть на устройстве
+          const r = await cloudFetch('/h', { data: store.get(CACHE_KEY, data), tz: TZ });
+          hkey = r.key; store.set(HKEY, hkey);
+          queue = []; store.set(QUEUE_KEY, queue);
+          showData(r.state);
+        } else {
+          const sent = queue.slice();
+          const s = sent.length ? await cloudFetch(`/h/${hkey}/ops`, { ops: sent, tz: TZ }) : await cloudFetch(`/h/${hkey}`);
+          queue = queue.slice(sent.length); store.set(QUEUE_KEY, queue);
+          for (const op of queue) applyOp(s, op); // то, что добавилось во время отправки
+          showData(s);
+        }
+        setOnline(true);
+      } catch (e) {
+        setOnline(false);
+      } finally {
+        syncing = null;
+      }
+    })();
+    return syncing;
+  }
+
+  function cloudApi(method, url, body) {
+    let op;
+    if (url === '/api/pills' && method === 'POST') op = { type: 'pill', pill: body };
+    else if (url.startsWith('/api/pills/') && method === 'DELETE') op = { type: 'del', id: decodeURIComponent(url.slice('/api/pills/'.length)) };
+    else if (url === '/api/toggle') {
+      const already = (data.log[body.date] || {})[`${body.pillId}@${body.time}`];
+      op = { type: 'mark', date: body.date, pillId: body.pillId, time: body.time, at: already ? null : body.at };
+    } else { sync(); return data; }
+    const s = structuredClone(data);
+    applyOp(s, op);
+    queue.push(op); store.set(QUEUE_KEY, queue);
+    showData(s);
+    sync();
     return s;
   }
-  if (LOCAL) {
-    // Просим браузер не удалять данные при нехватке места
+
+  // Подключить устройство к общему списку по коду
+  async function join(code) {
+    code = String(code || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (code.length !== 12) throw new Error('Код состоит из 12 букв и цифр');
+    code = `${code.slice(0, 4)}-${code.slice(4, 8)}-${code.slice(8)}`;
+    if (code === hkey) return;
+    const s = await cloudFetch(`/h/${code}`).catch(e => { throw new Error(e.status === 404 ? 'Такой код не найден' : 'Нет связи с интернетом'); });
+    hkey = code; store.set(HKEY, hkey);
+    queue = []; store.set(QUEUE_KEY, queue);
+    showData(s);
+    if (pushState === 'on') await enablePush().catch(() => {}); // напоминания теперь для нового списка
+  }
+
+  if (CLOUD) {
+    data = store.get(CACHE_KEY, data);
     try { navigator.storage?.persist?.(); } catch {}
-    // Изменения из другой вкладки этого же браузера
-    addEventListener('storage', e => { if (e.key === LOCAL_KEY) setData(store.get(LOCAL_KEY, data)); });
+    addEventListener('online', () => sync());
+    setInterval(() => { if (!document.hidden) sync(); }, 15000);
+  }
+
+  // ---------- Напоминания (Web Push) ----------
+  const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const standalone = navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
+  let pushState = 'unknown'; // unknown | needs-install | unsupported | denied | off | on
+
+  async function checkPush() {
+    if (!CLOUD) return;
+    let st;
+    if (isIOS && !standalone) st = 'needs-install';
+    else if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) st = 'unsupported';
+    else if (Notification.permission === 'denied') st = 'denied';
+    else {
+      const reg = await navigator.serviceWorker.ready;
+      st = (await reg.pushManager.getSubscription()) && Notification.permission === 'granted' ? 'on' : 'off';
+    }
+    if (st !== pushState) { pushState = st; if (view === 'remind') render(); }
+  }
+
+  async function enablePush() {
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') { await checkPush(); throw new Error(perm === 'denied' ? 'denied' : 'Разрешение не выдано'); }
+    if (!hkey) await sync();
+    if (!hkey) throw new Error('Нет связи с интернетом');
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      const { key } = await cloudFetch('/vapid');
+      sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(key) });
+    }
+    await cloudFetch(`/h/${hkey}/subscribe`, { sub: sub.toJSON(), tz: TZ });
+    pushState = 'on';
+  }
+
+  async function disablePush() {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) {
+      await cloudFetch(`/h/${hkey}/unsubscribe`, { endpoint: sub.endpoint }).catch(() => {});
+      await sub.unsubscribe();
+    }
+    pushState = 'off';
+  }
+
+  async function testPush() {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (!sub) throw new Error('Напоминания не включены');
+    const r = await cloudFetch(`/h/${hkey}/test`, { endpoint: sub.endpoint });
+    if (!r.ok) throw new Error('Сервис уведомлений не принял сообщение');
+  }
+
+  function b64ToBytes(s) {
+    const bin = atob(s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4));
+    return Uint8Array.from(bin, c => c.charCodeAt(0));
   }
 
   // ---------- Связь с сервером ----------
   async function api(method, url, body) {
-    if (LOCAL) {
-      const j = localApi(method, url, body);
-      setData(j);
-      return j;
-    }
+    if (CLOUD) return cloudApi(method, url, body);
     try {
       const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
       const j = await r.json();
@@ -342,14 +477,15 @@
     if (el) el.hidden = v;
   }
   function connect() {
-    if (LOCAL) return;
+    if (CLOUD) return;
     const es = new EventSource('/api/events');
     es.onmessage = e => { setOnline(true); setData(JSON.parse(e.data)); };
     es.onerror = () => { setOnline(false); };
   }
   // Safari может «усыплять» вкладку — при возврате обновляем данные
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) api('GET', '/api/state').catch(() => {});
+    if (document.hidden) return;
+    if (CLOUD) { sync(); checkPush(); } else api('GET', '/api/state').catch(() => {});
   });
 
   // ---------- Диалог подтверждения ----------
@@ -391,13 +527,81 @@
   function topBar() {
     return `
       <div class="top">
-        <span class="status" id="status" ${online ? 'hidden' : ''}>● Нет связи с компьютером</span>
+        <span class="status" id="status" ${online ? 'hidden' : ''}>${CLOUD ? '● Нет интернета — отметки отправятся позже' : '● Нет связи с компьютером'}</span>
         <span></span>
         <div class="tools">
+          ${CLOUD ? `<button class="icon-btn" data-act="remind" aria-label="Напоминания и другие устройства">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+          </button>` : ''}
           <button class="icon-btn" data-act="toggle-font" aria-expanded="${showFont}" aria-label="Размер текста и оформление">Аа</button>
         </div>
       </div>
       ${fontPanel()}`;
+  }
+
+  const BACK_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>';
+  let remindMsg = '', remindOk = false;
+
+  function renderRemind() {
+    const link = `${location.origin}${location.pathname}#k=${hkey}`;
+    let push;
+    if (pushState === 'needs-install') push = `
+      <p>Чтобы получать напоминания на iPhone, приложение нужно добавить на экран «Домой»:</p>
+      <ol class="steps">
+        <li>Нажмите кнопку «Поделиться» <span aria-hidden="true">⬆︎</span> внизу Safari</li>
+        <li>Выберите «На экран „Домой“»</li>
+        <li>Откройте «Таблетки» с экрана «Домой» и вернитесь сюда</li>
+      </ol>`;
+    else if (pushState === 'unsupported') push = `<p>Этот браузер не умеет показывать напоминания. На iPhone нужна iOS 16.4 или новее.</p>`;
+    else if (pushState === 'denied') push = isIOS
+      ? `<p>Уведомления запрещены. Включите их: <b>Настройки → Уведомления → Таблетки</b>.</p>`
+      : `<p>Уведомления запрещены. Разрешите их для этого сайта в настройках браузера (значок слева от адреса).</p>`;
+    else if (pushState === 'on') push = `
+      <p class="ok-line">✓ Напоминания включены на этом устройстве</p>
+      <div class="form-actions">
+        <button class="btn btn-ghost btn-block" data-act="push-test">Проверить напоминание</button>
+        <button class="btn btn-danger btn-block" data-act="push-off">Выключить напоминания</button>
+      </div>`;
+    else push = `
+      <div class="form-actions">
+        <button class="btn btn-primary btn-block" data-act="push-on">Включить напоминания</button>
+      </div>`;
+
+    app.innerHTML = topBar() + `
+      <div class="screen-head">
+        <button class="icon-btn" data-act="back" aria-label="Назад">${BACK_ICON}</button>
+        <h1>Напоминания</h1>
+      </div>
+      <section class="panel">
+        <p class="hint" style="margin-top:0">Напоминание приходит во время приёма. Если лекарство не отмечено, через 30 минут придёт повторное.</p>
+        ${push}
+        <div class="${remindOk ? 'ok-line' : 'error'}" role="alert" ${remindMsg ? '' : 'hidden'}>${esc(remindMsg)}</div>
+      </section>
+
+      <h2 class="section-title">Другие устройства</h2>
+      <section class="panel">
+        <p class="hint" style="margin-top:0">Откройте ссылку на другом телефоне или компьютере — там появится этот же список, а отметки будут видны везде.</p>
+        ${hkey ? `
+          <div class="code-box"><span class="hint">Код списка</span><b>${hkey}</b></div>
+          <div class="form-actions">
+            <button class="btn btn-primary btn-block" data-act="share-link" data-link="${esc(link)}">Отправить ссылку</button>
+          </div>` : `<p>Код появится, когда устройство подключится к интернету.</p>`}
+        <form id="join-form" autocomplete="off">
+          <label class="f" for="join-code">Подключиться по коду</label>
+          <input class="in" id="join-code" placeholder="XXXX-XXXX-XXXX" autocapitalize="characters" spellcheck="false" maxlength="16">
+          <div class="form-actions"><button type="submit" class="btn btn-ghost btn-block">Подключиться</button></div>
+        </form>
+      </section>`;
+  }
+
+  async function remindAction(fn) {
+    remindMsg = ''; remindOk = false;
+    try { await fn(); }
+    catch (e) {
+      remindMsg = e.message === 'denied' ? '' : e.message === 'Failed to fetch' ? 'Нет связи с интернетом' : e.message;
+      await checkPush();
+    }
+    render();
   }
 
   // Приёмы на дату: только лекарства, которые уже были добавлены к этому дню
@@ -640,6 +844,7 @@
     if (view === 'manage') renderManage();
     else if (view === 'edit') renderEdit();
     else if (view === 'calendar') renderCalendar();
+    else if (view === 'remind') renderRemind();
     else renderToday();
   }
 
@@ -712,6 +917,16 @@
       case 'next': if (offset < 1) { offset++; render(); } break;
       case 'today': offset = 0; render(); break;
       case 'manage': go('manage'); break;
+      case 'remind': remindMsg = ''; remindOk = false; go('remind'); checkPush(); break;
+      case 'push-on': remindAction(enablePush); break;
+      case 'push-off': remindAction(disablePush); break;
+      case 'push-test': remindAction(async () => { await testPush(); remindOk = true; remindMsg = 'Отправлено — уведомление придёт через несколько секунд'; }); break;
+      case 'share-link': {
+        const url = t.dataset.link;
+        if (navigator.share) navigator.share({ title: 'Мои таблетки', text: 'Список лекарств', url }).catch(() => {});
+        else navigator.clipboard?.writeText(url).then(() => { remindOk = true; remindMsg = 'Ссылка скопирована'; render(); }, () => prompt('Скопируйте ссылку:', url));
+        break;
+      }
       case 'calendar': { const d = dayDate(); calMonth = new Date(d.getFullYear(), d.getMonth(), 1); go('calendar'); break; }
       case 'cal-prev': calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() - 1, 1); render(); break;
       case 'cal-next': calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 1); render(); break;
@@ -737,6 +952,15 @@
 
   app.addEventListener('submit', async e => {
     e.preventDefault();
+    if (e.target.id === 'join-form') {
+      const code = document.getElementById('join-code').value;
+      remindAction(async () => {
+        if (data.pills.length && !(await confirmBox('Подключить общий список?', 'Список лекарств на этом устройстве заменится общим.', 'Да, подключить'))) return;
+        await join(code);
+        remindOk = true; remindMsg = 'Готово: устройство подключено к общему списку';
+      });
+      return;
+    }
     syncForm();
     const err = document.getElementById('form-error');
     const pill = { ...editing, name: editing.name.trim(), times: editing.times.filter(Boolean) };
@@ -757,10 +981,27 @@
   applyFont();
   applyTheme();
   render();
-  api('GET', '/api/state').catch(() => render());
-  connect();
-  // На сайте — работа без интернета после первого открытия
-  if (LOCAL && 'serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  if (CLOUD) {
+    // Работа без интернета и напоминания
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').then(checkPush, () => {});
+    else checkPush();
+    // Ссылка вида …#k=XXXX-XXXX-XXXX подключает устройство к общему списку
+    const openLink = async () => {
+      const m = location.hash.match(/k=([A-Za-z0-9-]{12,16})/);
+      if (location.hash) history.replaceState(null, '', location.pathname + location.search);
+      if (!m || m[1].toUpperCase() === hkey) return sync();
+      if (data.pills.length && !(await confirmBox('Подключить общий список?', 'Список лекарств на этом устройстве заменится общим.', 'Да, подключить'))) return sync();
+      try { await join(m[1]); offset = 0; go('today'); }
+      catch (e) { alert(e.message); sync(); }
+    };
+    addEventListener('hashchange', openLink);
+    openLink();
+    // Нажатие на напоминание открывает сегодняшний день
+    navigator.serviceWorker?.addEventListener('message', e => { if (e.data === 'open-today') { offset = 0; go('today'); sync(); } });
+  } else {
+    api('GET', '/api/state').catch(() => render());
+    connect();
+  }
 })();
 </script>
 </body>
