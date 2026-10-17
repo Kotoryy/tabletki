@@ -219,6 +219,7 @@
   .section-title { font-size: 1.15rem; margin: 1.5rem .25rem .6rem; }
   .steps { margin: 0 0 .5rem; padding-left: 1.4rem; }
   .steps li { margin-bottom: .5rem; }
+  .diag { font-size: min(.75rem, 15px); margin: 1rem 0 0 !important; overflow-wrap: anywhere; }
   .ok-line { color: var(--accent); font-weight: 700; }
   .code-box { display: flex; flex-direction: column; align-items: center; gap: .2rem; padding: .8rem; border-radius: .9rem; background: var(--bg); }
   .code-box b { font-size: min(1.5rem, 32px); letter-spacing: .08em; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; overflow-wrap: anywhere; text-align: center; }
@@ -398,6 +399,12 @@
   const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const standalone = navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
   let pushState = 'unknown'; // unknown | needs-install | unsupported | denied | off | on
+  let pushDebug = ''; // последний ответ системы — для поиска проблем
+  const diag = () => {
+    const ios = (navigator.userAgent.match(/OS (d+)_(d+)/) || []).slice(1).join('.');
+    const perm = 'Notification' in window ? Notification.permission : 'нет';
+    return `iOS ${ios || '—'} · с экрана Домой: ${standalone ? 'да' : 'нет'} · разрешение: ${perm} · Push: ${'PushManager' in window ? 'есть' : 'нет'} · SW: ${navigator.serviceWorker?.controller ? 'да' : 'нет'}${pushDebug ? ' · ' + pushDebug : ''}`;
+  };
 
   async function checkPush() {
     if (!CLOUD) return;
@@ -413,7 +420,10 @@
   }
 
   async function enablePush() {
-    const perm = await Notification.requestPermission();
+    let perm;
+    try { perm = await Notification.requestPermission(); }
+    catch (e) { pushDebug = 'запрос: ' + e.message; throw new Error('iPhone не показал запрос разрешения'); }
+    pushDebug = 'ответ на запрос: ' + perm;
     if (perm !== 'granted') { await checkPush(); throw new Error(perm === 'denied' ? 'denied' : 'Разрешение не выдано'); }
     if (!hkey) await sync();
     if (!hkey) throw new Error('Нет связи с интернетом');
@@ -421,7 +431,8 @@
     let sub = await reg.pushManager.getSubscription();
     if (!sub) {
       const { key } = await cloudFetch('/vapid');
-      sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(key) });
+      try { sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(key) }); }
+      catch (e) { pushDebug = 'подписка: ' + e.name + ' ' + e.message; throw new Error('Не удалось подписаться на уведомления'); }
     }
     await cloudFetch(`/h/${hkey}/subscribe`, { sub: sub.toJSON(), tz: TZ });
     pushState = 'on';
@@ -560,7 +571,8 @@
           <li>Удалите иконку «Таблетки» с экрана «Домой»</li>
           <li>Откройте сайт в Safari и снова добавьте на экран «Домой»</li>
           <li>Откройте с иконки, введите код в «Подключиться по коду», затем «Включить напоминания» → <b>«Разрешить»</b></li>
-        </ol>`
+        </ol>
+        <div class="form-actions"><button class="btn btn-ghost btn-block" data-act="push-on">Попробовать включить ещё раз</button></div>`
       : `<p>Уведомления запрещены. Разрешите их для этого сайта в настройках браузера (значок слева от адреса).</p>`;
     else if (pushState === 'on') push = `
       <p class="ok-line">✓ Напоминания включены на этом устройстве</p>
@@ -582,6 +594,7 @@
         <p class="hint" style="margin-top:0">Напоминание приходит во время приёма. Если лекарство не отмечено, через 30 минут придёт повторное.</p>
         ${push}
         <div class="${remindOk ? 'ok-line' : 'error'}" role="alert" ${remindMsg ? '' : 'hidden'}>${esc(remindMsg)}</div>
+        <p class="hint diag">${esc(diag())}</p>
       </section>
 
       <h2 class="section-title">Другие устройства</h2>
@@ -604,7 +617,7 @@
     remindMsg = ''; remindOk = false;
     try { await fn(); }
     catch (e) {
-      remindMsg = e.message === 'denied' ? '' : e.message === 'Failed to fetch' ? 'Нет связи с интернетом' : e.message;
+      remindMsg = e.message === 'denied' ? 'iPhone ответил: уведомления запрещены' : e.message === 'Failed to fetch' ? 'Нет связи с интернетом' : e.message;
       await checkPush();
     }
     render();
