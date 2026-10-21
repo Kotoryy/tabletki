@@ -288,11 +288,13 @@
   // Изменения сразу применяются на устройстве, копятся в очереди и отправляются, когда есть интернет.
   const API = window.PILLS_API || '';
   const CLOUD = !!API;
-  const CACHE_KEY = 'pills-data', QUEUE_KEY = 'pills-queue', HKEY = 'pills-key';
+  const CACHE_KEY = 'pills-data', QUEUE_KEY = 'pills-queue', HKEY = 'pills-key', SYNCED_KEY = 'pills-synced';
   const TZ = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return ''; } })();
   const cleanTimes = times => [...new Set((times || []).filter(t => /^\d{2}:\d{2}$/.test(t)))].sort();
   let hkey = store.get(HKEY, '');
   let queue = store.get(QUEUE_KEY, []);
+  // До какой версии сервера на устройстве уже есть весь журнал: тогда сервер присылает только изменения
+  let synced = store.get(SYNCED_KEY, null);
   let syncing = null;
 
   // То же самое делает сервер с каждой операцией
@@ -330,6 +332,23 @@
     return j;
   }
 
+  // Ответы сервера маленькие (без VPN в России связь с Cloudflare рвётся после ~16 КБ):
+  // журнал приходит частями от свежих дней к старым, а при обычной синхронизации — только изменённые дни.
+  async function pull(key, first) {
+    const s = first.since ? structuredClone(data) : { log: {} };
+    let page = first;
+    for (;;) {
+      for (const [date, day] of Object.entries(page.log)) {
+        if (Object.keys(day).length) s.log[date] = day; else delete s.log[date];
+      }
+      if (!page.more) break;
+      page = await cloudFetch(`/h/${key}?v=${first.since}&before=${page.more}`);
+    }
+    s.pills = first.pills;
+    s.version = first.version;
+    return s;
+  }
+
   // Отправить очередь и получить свежий общий список
   function sync() {
     if (!CLOUD) return Promise.resolve();
@@ -341,13 +360,24 @@
           const r = await cloudFetch('/h', { data: store.get(CACHE_KEY, data), tz: TZ });
           hkey = r.key; store.set(HKEY, hkey);
           queue = []; store.set(QUEUE_KEY, queue);
-          showData(r.state);
+          synced = null; store.set(SYNCED_KEY, synced);
+          showData(await pull(hkey, r.state));
+          synced = { key: hkey, v: r.state.version }; store.set(SYNCED_KEY, synced);
         } else {
-          const sent = queue.slice();
-          const s = sent.length ? await cloudFetch(`/h/${hkey}/ops`, { ops: sent, tz: TZ }) : await cloudFetch(`/h/${hkey}`);
-          queue = queue.slice(sent.length); store.set(QUEUE_KEY, queue);
+          const key = hkey;
+          const v = synced?.key === key ? synced.v : 0;
+          let first;
+          while (queue.length && hkey === key) { // по 50 операций, чтобы и запросы были небольшими
+            const sent = queue.slice(0, 50);
+            first = await cloudFetch(`/h/${key}/ops`, { ops: sent, tz: TZ, v });
+            queue = queue.slice(sent.length); store.set(QUEUE_KEY, queue);
+          }
+          if (!first) first = await cloudFetch(`/h/${key}?v=${v}`);
+          const s = await pull(key, first);
+          if (hkey !== key) return; // пока шёл ответ, подключили другой список
           for (const op of queue) applyOp(s, op); // то, что добавилось во время отправки
           showData(s);
+          synced = { key, v: first.version }; store.set(SYNCED_KEY, synced);
         }
         setOnline(true);
       } catch (e) {
@@ -384,7 +414,9 @@
     const s = await cloudFetch(`/h/${code}`).catch(e => { throw new Error(e.status === 404 ? 'Такой код не найден' : 'Нет связи с интернетом'); });
     hkey = code; store.set(HKEY, hkey);
     queue = []; store.set(QUEUE_KEY, queue);
-    showData(s);
+    synced = null; store.set(SYNCED_KEY, synced);
+    showData({ pills: s.pills, log: s.log, version: s.version }); // свежие дни сразу, остальная история — следом
+    sync();
     if (pushState === 'on') await enablePush().catch(() => {}); // напоминания теперь для нового списка
   }
 
